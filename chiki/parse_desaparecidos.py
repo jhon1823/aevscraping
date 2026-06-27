@@ -55,10 +55,10 @@ def main():
     print("Procesando y mapeando al esquema BBDD...")
 
     headers = [
-        "id", "nombre", "cedula", "edad", "ultima_ubicacion", 
-        "telefono_contacto", "observaciones", "estado", 
-        "ubicacion_encontrado", "encontrado_por", "encontrado_por_cedula", 
-        "foto_url", "fecha_registro", "fecha_actualizacion", "es_menor"
+        "id", "nombre", "cedula", "edad", "ultima_ubicacion",
+        "telefono_contacto", "observaciones", "estado",
+        "ubicacion_encontrado", "encontrado_por", "encontrado_por_cedula",
+        "foto_url", "fecha_registro", "fecha_actualizacion", "es_menor", "fuente"
     ]
 
     all_rows = []
@@ -141,7 +141,8 @@ def main():
             "foto_url": foto_url,
             "fecha_registro": fecha_registro,
             "fecha_actualizacion": fecha_actualizacion,
-            "es_menor": es_menor
+            "es_menor": es_menor,
+            "fuente": "desaparecidosterremoto"
         }
         all_rows.append(row)
 

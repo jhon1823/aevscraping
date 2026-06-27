@@ -128,7 +128,8 @@ def map_row(item):
         "foto_url": foto_url,
         "fecha_registro": fecha_registro,
         "fecha_actualizacion": fecha_actualizacion,
-        "es_menor": es_menor
+        "es_menor": es_menor,
+        "fuente": "redayudavenezuela"
     }
 
 def fetch_chunk(status, offset, limit=1000):
@@ -183,10 +184,10 @@ def main():
     all_rows = []
     
     headers = [
-        "id", "nombre", "cedula", "edad", "ultima_ubicacion", 
-        "telefono_contacto", "observaciones", "estado", 
-        "ubicacion_encontrado", "encontrado_por", "encontrado_por_cedula", 
-        "foto_url", "fecha_registro", "fecha_actualizacion", "es_menor"
+        "id", "nombre", "cedula", "edad", "ultima_ubicacion",
+        "telefono_contacto", "observaciones", "estado",
+        "ubicacion_encontrado", "encontrado_por", "encontrado_por_cedula",
+        "foto_url", "fecha_registro", "fecha_actualizacion", "es_menor", "fuente"
     ]
 
     try:

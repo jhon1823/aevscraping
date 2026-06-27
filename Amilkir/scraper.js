@@ -201,7 +201,8 @@ function mapToSchema(person) {
         foto_url: foto_url,
         fecha_registro: person.createdAt || new Date().toISOString(),
         fecha_actualizacion: person.updatedAt || person.lastActivityAt || person.createdAt || new Date().toISOString(),
-        es_menor: es_menor
+        es_menor: es_menor,
+        fuente: 'venezuelatebusca'
     };
 }
 
@@ -210,9 +211,10 @@ function mapToSchema(person) {
 // ==========================================
 function convertToCSV(data) {
     const headers = [
-        'id', 'nombre', 'cedula', 'edad', 'ultima_ubicacion', 'telefono_contacto', 
-        'observaciones', 'estado', 'ubicacion_encontrado', 'encontrado_por', 
-        'encontrado_por_cedula', 'foto_url', 'fecha_registro', 'fecha_actualizacion', 'es_menor'
+        'id', 'nombre', 'cedula', 'edad', 'ultima_ubicacion', 'telefono_contacto',
+        'observaciones', 'estado', 'ubicacion_encontrado', 'encontrado_por',
+        'encontrado_por_cedula', 'foto_url', 'fecha_registro', 'fecha_actualizacion', 'es_menor',
+        'fuente'
     ];
 
     const escapeValue = (val) => {
