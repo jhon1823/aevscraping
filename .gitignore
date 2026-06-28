@@ -1,0 +1,12 @@
+# Ignorar carpetas de datos consolidados y logs
+datos_consolidados/
+logs/
+
+# Ignorar bases de datos locales y archivos de datos pesados (.json, .csv, .xlsx, .rar)
+**/*.json
+**/*.csv
+**/*.xlsx
+**/*.rar
+
+# Conservar esquemas de BBDD que son archivos de configuración pequeños
+!**/esquema-bbdd-sos-json*.json

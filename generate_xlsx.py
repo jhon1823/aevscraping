@@ -9,6 +9,7 @@ Requiere: pip install openpyxl
 
 import json
 import sys
+import re
 from pathlib import Path
 
 try:
@@ -91,11 +92,33 @@ def main():
 
     ws.row_dimensions[1].height = 30
 
+    illegal_char_re = re.compile(r"[\x00-\x08\x0b-\x0c\x0e-\x1f]")
+
     for row_idx, record in enumerate(data, start=2):
         for col_idx, col_key in enumerate(COLUMNS, start=1):
             val = record.get(col_key)
             if isinstance(val, bool):
                 val = "Sí" if val else "No"
+            elif isinstance(val, dict):
+                # Convert contact-like dictionaries to a friendly string
+                name = val.get("name") or val.get("nombre")
+                phone = val.get("phone") or val.get("telefono")
+                if name and phone:
+                    val = f"{name} ({phone})"
+                elif name:
+                    val = name
+                elif phone:
+                    val = phone
+                else:
+                    val = json.dumps(val, ensure_ascii=False)
+            elif isinstance(val, list):
+                val = ", ".join(str(item) for item in val)
+            elif val is not None and not isinstance(val, (int, float, str)):
+                val = str(val)
+            
+            if isinstance(val, str):
+                val = illegal_char_re.sub("", val)
+
             ws.cell(row=row_idx, column=col_idx, value=val)
 
     ws.freeze_panes = "A2"
