@@ -164,7 +164,7 @@ def run(db, migrations, out_dir, sources, run_id, max_mb=5.0, scrape=False,
         (out_dir / "alertas.json").write_text(
             json.dumps(alertas, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"cotejo: {reporte['cotejo']['grupos_coincidencia']} grupos, "
-              f"{reporte['cotejo']['alertas_criticas']} alertas críticas → alertas.json")
+              f"{reporte['cotejo']['alertas_criticas']} alertas críticas -> alertas.json")
 
     # 8. subir el delta a la API (opt-in; pega a producción)
     if upload and xls:
