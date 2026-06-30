@@ -219,10 +219,11 @@ def normalizar_telefono(telefono):
         if 8 <= len(numero) <= 16:
             return numero
 
-    # Buscar número local venezolano (04XX o 02XX)
-    match = re.search(r'0[24]\d{9,11}', texto)
+    # Buscar número local venezolano (04XX o 02XX), acepta guion en medio
+    match = re.search(r'0[24]\d{2}[\-\s]?\d{6,8}', texto)
     if match:
-        return match.group()
+        numero = re.sub(r'[\s\-]', '', match.group())
+        return numero
 
     # Buscar secuencia larga de dígitos (sin prefijo)
     match = re.search(r'\d{10,13}', texto)
