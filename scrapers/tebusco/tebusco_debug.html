@@ -1,0 +1,937 @@
+<!DOCTYPE html><html lang="es"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>TeBusco — Reunir familias en catástrofes</title>
+<meta name="theme-color" content="#0d1418">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#0d1418;          /* carbón azulado, no negro plano */
+    --bg-2:#121c22;
+    --panel:#16232b;
+    --panel-2:#1b2c35;
+    --line:#273a44;
+    --line-soft:#1f2f38;
+    --txt:#e6eef1;
+    --txt-dim:#8aa0aa;
+    --txt-faint:#5b727d;
+    --signal:#39d4c4;      /* cian de señal — el acento, usado con disciplina */
+    --signal-deep:#1f8e84;
+    --search:#ff5a5f;      /* desaparecido — coral urgente */
+    --hurt:#f5a623;        /* herido — ámbar */
+    --safe:#46c98b;        /* a salvo — verde */
+    --located:#5aa9e6;     /* localizado sin confirmar — azul */
+    --reunited:#39d4c4;    /* reunido — cian */
+    --gone:#7d8a91;        /* fallecido — gris sobrio */
+    --mono:"SF Mono",ui-monospace,"Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+
+  .solidaridad{display:flex;align-items:center;justify-content:center;gap:.5rem;text-align:center;
+    padding:.6rem .9rem;font-size:.82rem;line-height:1.4;font-weight:500;color:#ffe7c2;
+    background:linear-gradient(90deg, rgba(255,90,95,.16), rgba(245,166,35,.14), rgba(57,212,196,.14));
+    border-bottom:1px solid var(--line-soft)}
+  .solidaridad .flag{font-size:1.1rem;flex:none}
+
+  .contadores{display:flex;gap:.4rem;padding:.8rem .7rem;border-bottom:1px solid var(--line-soft)}
+  .contadores .cnt{flex:1;text-align:center;border:1px solid var(--line);border-radius:9px;
+    padding:.55rem .2rem;min-width:0}
+    background:var(--panel);padding:.6rem .3rem}
+  .contadores .cnt-ok{border-color:#1f6e4a;background:#13211a}
+  .contadores .cnt-busca{border-color:#5a2326;background:#1f1416}
+  .contadores .cnt-conf{border-color:#2a5a7a;background:#0e1c26}
+  .contadores .cnt-n{font-size:1.35rem;font-weight:800;line-height:1;color:#39d4c4}
+  .contadores .cnt-ok .cnt-n{color:#46c98b}
+  .contadores .cnt-busca .cnt-n{color:#ff5a5f}
+  .contadores .cnt-conf .cnt-n{color:#5aa9e6}
+  .contadores .cnt-l{font-family:var(--mono);font-size:.54rem;letter-spacing:.02em;text-transform:uppercase;
+    color:var(--txt-faint);margin-top:.3rem}
+  html,body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.5;font-size:16px}
+  body{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;
+    background-image:radial-gradient(circle at 50% -10%, #16252d 0%, var(--bg) 55%)}
+  ::selection{background:var(--signal);color:var(--bg)}
+
+  /* barra de telemetría: estado del enlace */
+  .status{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:.6rem;
+    padding:.6rem .95rem;font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;
+    text-transform:uppercase;border-bottom:1px solid var(--line);background:rgba(13,20,24,.92);
+    backdrop-filter:blur(8px)}
+  .status .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .status.on{color:var(--safe)}
+  .status.on .dot{background:var(--safe);box-shadow:0 0 0 0 var(--safe);animation:ping 2.2s infinite}
+  .status.off{color:var(--search)}
+  .status.off .dot{background:var(--search);animation:blink 1s steps(2,start) infinite}
+  .status .pending{margin-left:auto;color:var(--signal);border:1px solid var(--signal-deep);
+    border-radius:4px;padding:.1rem .45rem;font-size:.68rem}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(70,201,139,.5)}70%{box-shadow:0 0 0 7px rgba(70,201,139,0)}100%{box-shadow:0 0 0 0 rgba(70,201,139,0)}}
+  @keyframes blink{50%{opacity:.25}}
+
+  .missing-bar{display:none;background:linear-gradient(90deg,#3a1416,#2a1012);color:var(--search);
+    padding:.65rem .95rem;font-family:var(--mono);font-size:.74rem;letter-spacing:.03em;
+    cursor:pointer;align-items:center;gap:.55rem;border-bottom:1px solid #4a1c1f;text-transform:uppercase}
+  .missing-bar.show{display:flex}
+
+  .recordatorio{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;padding:.7rem .95rem;
+    background:linear-gradient(90deg, rgba(70,201,139,.14), rgba(57,212,196,.1));
+    border-bottom:1px solid var(--line-soft)}
+  .recordatorio .rec-txt{flex:1;min-width:180px;font-size:.82rem;line-height:1.4;color:#bfe3cf}
+  .recordatorio .rec-txt b{display:block;color:#7ee0a8;font-size:.86rem;margin-bottom:1px}
+  .recordatorio .rec-btn{font-family:var(--mono);font-size:.72rem;letter-spacing:.03em;font-weight:700;
+    background:var(--safe);color:#05210f;border:none;border-radius:7px;padding:.5rem .8rem;cursor:pointer;text-transform:uppercase}
+  .recordatorio .rec-btn:hover{filter:brightness(1.08)}
+  .missing-bar .n{background:var(--search);color:#2a1012;border-radius:4px;padding:.05rem .45rem;font-weight:700}
+  .missing-bar .go{margin-left:auto;color:#ff9a9d}
+
+  .install{display:none;align-items:center;gap:.6rem;background:var(--panel-2);color:var(--txt);
+    padding:.65rem .95rem;font-size:.84rem;border-bottom:1px solid var(--line)}
+  .install.show{display:flex}
+  .install button{margin-left:auto;background:var(--signal);color:var(--bg);border:none;
+    border-radius:6px;padding:.42rem .85rem;font-weight:700;cursor:pointer;font-size:.8rem}
+
+  /* botón flotante fijo de instalar */
+  .fab-install{position:fixed;left:50%;bottom:1.1rem;transform:translateX(-50%);z-index:60;
+    display:none;align-items:center;gap:.45rem;background:var(--signal);color:var(--bg);
+    border:none;border-radius:999px;padding:.75rem 1.3rem;font-weight:800;font-size:.92rem;
+    cursor:pointer;box-shadow:0 6px 24px rgba(57,212,196,.35);font-family:var(--sans)}
+  .fab-install.show{display:inline-flex;animation:fabin .3s ease}
+  .fab-install:active{filter:brightness(.93)}
+  @keyframes fabin{from{opacity:0;transform:translateX(-50%) translateY(12px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+  .ios-steps{margin:.2rem 0 1rem;padding-left:1.2rem;color:var(--txt-dim);font-size:.92rem;line-height:1.8}
+  .ios-steps b{color:var(--txt)}
+
+  header{padding:1.5rem 1.1rem 1rem}
+  .mark{display:flex;align-items:center;gap:.6rem}
+  .glyph{width:30px;height:30px;flex:none}
+  .mark h1{font-size:1.5rem;font-weight:700;letter-spacing:-.01em}
+  .mark h1 .b{color:var(--signal)}
+  .tagline{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--txt-faint);margin-top:.5rem}
+  header p{color:var(--txt-dim);font-size:.9rem;margin-top:.7rem;max-width:42ch}
+  .origen{display:flex;align-items:center;gap:.4rem;margin-top:.9rem;font-family:var(--mono);
+    font-size:.7rem;letter-spacing:.02em;color:var(--txt-faint);line-height:1.4}
+  .origen svg{flex:none;color:var(--signal-deep)}
+
+  nav{display:flex;gap:.5rem;padding:0 1.1rem 1.1rem}
+  nav button{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--txt-dim);
+    font-weight:600;font-size:.92rem;padding:.8rem .4rem;border-radius:10px;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:.25rem;transition:all .15s}
+  nav button .ico{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;color:var(--txt-faint)}
+  nav button.active{color:var(--txt);background:var(--panel-2);border-color:var(--signal-deep)}
+  nav button.active .ico{color:var(--signal)}
+
+  main{flex:1;padding:0 1.1rem 2rem}
+  .view{display:none}
+  .view.active{display:block;animation:rise .22s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+
+  .lead{font-size:.9rem;color:var(--txt-dim);margin-bottom:1.2rem}
+  .lead b{color:var(--txt)}
+
+  .field{margin-top:1rem}
+  label{display:block;font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--txt-faint);margin-bottom:.4rem}
+  label .opt{text-transform:none;letter-spacing:0;color:var(--txt-faint)}
+  input,textarea{width:100%;border:1px solid var(--line);background:var(--bg-2);border-radius:8px;
+    padding:.8rem .8rem;font-size:1rem;font-family:inherit;color:var(--txt)}
+  input::placeholder,textarea::placeholder{color:var(--txt-faint)}
+  input:focus,textarea:focus{outline:none;border-color:var(--signal);box-shadow:0 0 0 3px rgba(57,212,196,.12)}
+  textarea{min-height:62px;resize:vertical}
+
+  .states{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-top:.5rem}
+  .states button{border:1px solid var(--line);background:var(--bg-2);border-radius:8px;
+    padding:.6rem .3rem;font-weight:600;font-size:.82rem;cursor:pointer;color:var(--txt-dim);transition:all .12s}
+  .states button[aria-pressed="true"][data-s="search"]{background:var(--search);color:#2a1012;border-color:var(--search)}
+  .states button[aria-pressed="true"][data-s="hurt"]{background:var(--hurt);color:#2a1d05;border-color:var(--hurt)}
+  .states button[aria-pressed="true"][data-s="safe"]{background:var(--safe);color:#05210f;border-color:var(--safe)}
+  .states button[aria-pressed="true"][data-s="located"]{background:var(--located);color:#04161f;border-color:var(--located)}
+  .states button[aria-pressed="true"][data-s="reunited"]{background:var(--reunited);color:#05211f;border-color:var(--reunited)}
+  .states button[aria-pressed="true"][data-s="gone"]{background:var(--gone);color:#1a1f22;border-color:var(--gone)}
+
+  .hint{display:none;font-family:var(--mono);font-size:.74rem;line-height:1.6;margin-top:.7rem;
+    padding:.6rem .75rem;border-radius:6px}
+  .hint-search{background:rgba(255,90,95,.08);border-left:2px solid var(--search);color:#ffa6a8}
+  .hint-gone{background:rgba(125,138,145,.1);border-left:2px solid var(--gone);color:var(--txt-dim)}
+
+  .big{width:100%;border:none;border-radius:10px;padding:1rem;font-size:1.05rem;font-weight:700;
+    cursor:pointer;margin-top:1.4rem;transition:filter .12s}
+  .big:active{filter:brightness(.92)}
+  .big.save{background:var(--signal);color:var(--bg)}
+  .big.find{background:var(--signal);color:var(--bg)}
+
+  .note{margin-top:1rem;font-size:.8rem;color:var(--txt-faint);font-family:var(--mono);line-height:1.7;
+    border-left:1px solid var(--line);padding-left:.8rem}
+
+  .count{font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;
+    color:var(--txt-faint);margin:.3rem 0 1rem}
+
+  .card{border:1px solid var(--line);border-radius:10px;padding:.9rem;margin-bottom:.75rem;
+    background:var(--panel);position:relative;overflow:hidden}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--line)}
+  .card.s-search::before{background:var(--search)}
+  .card.s-hurt::before{background:var(--hurt)}
+  .card.s-safe::before{background:var(--safe)}
+  .card.s-located::before{background:var(--located)}
+  .card.s-reunited::before{background:var(--reunited)}
+  .card.s-gone::before{background:var(--gone)}
+  .card.s-gone{opacity:.82}
+  .card .top{display:flex;align-items:center;gap:.5rem}
+  .card .name{font-weight:700;font-size:1.05rem;flex:1}
+  .badge{font-family:var(--mono);font-size:.64rem;font-weight:700;letter-spacing:.06em;
+    padding:.22rem .5rem;border-radius:4px;white-space:nowrap;text-transform:uppercase}
+  .badge.search{background:rgba(255,90,95,.15);color:var(--search)}
+  .badge.hurt{background:rgba(245,166,35,.15);color:var(--hurt)}
+  .badge.safe{background:rgba(70,201,139,.15);color:var(--safe)}
+  .badge.reunited{background:rgba(57,212,196,.15);color:var(--reunited)}
+  .badge.gone{background:rgba(125,138,145,.15);color:var(--gone)}
+  .card .meta{font-size:.85rem;color:var(--txt-dim);margin-top:.5rem;display:grid;gap:.22rem}
+  .card .meta b{color:var(--txt);font-weight:600}
+  .card .meta .k{font-family:var(--mono);font-size:.64rem;letter-spacing:.05em;text-transform:uppercase;color:var(--txt-faint)}
+  .card .actions{margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+  .card .wa{display:inline-flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.72rem;
+    letter-spacing:.03em;font-weight:600;background:#1f8a4c;color:#fff;border:none;border-radius:6px;
+    padding:.45rem .7rem;cursor:pointer;text-decoration:none;text-transform:uppercase}
+  .card .wa:hover,.card .wa:focus-visible{filter:brightness(1.1)}
+  .card .resolve{font-family:var(--mono);font-size:.72rem;letter-spacing:.04em;font-weight:600;
+    background:transparent;color:var(--signal);border:1px solid var(--signal-deep);border-radius:6px;
+    padding:.45rem .7rem;cursor:pointer;text-transform:uppercase}
+  .card .resolve-aparecio{font-family:var(--sans);font-size:.86rem;font-weight:800;width:100%;
+    background:var(--safe);color:#05210f;border:none;border-radius:9px;
+    padding:.7rem;cursor:pointer;margin-top:.2rem}
+  .card .resolve-aparecio:hover{filter:brightness(1.08)}
+  .card .resolve-aparecio:active{transform:scale(.99)}
+  .card .pendrow{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:.65rem;
+    padding-top:.65rem;border-top:1px solid var(--line-soft)}
+  .card .unsynced{font-family:var(--mono);font-size:.68rem;letter-spacing:.03em;color:var(--hurt);text-transform:uppercase}
+
+
+  .empty{text-align:center;color:var(--txt-faint);padding:2.5rem 1rem;border:1px dashed var(--line);
+    border-radius:10px;font-size:.9rem;line-height:1.7}
+  .empty b{color:var(--txt-dim)}
+  .empty .seek{display:block;margin:1.1rem auto 0;font-family:var(--mono);font-size:.78rem;
+    letter-spacing:.03em;font-weight:600;background:var(--search);color:#2a1012;border:none;
+    border-radius:8px;padding:.7rem 1rem;cursor:pointer;text-transform:uppercase}
+  .empty .seek:hover{filter:brightness(1.08)}
+  .card .seeking{margin-top:.6rem;font-family:var(--mono);font-size:.72rem;line-height:1.6;
+    color:var(--search);background:rgba(255,90,95,.1);border-left:2px solid var(--search);
+    padding:.5rem .65rem;border-radius:6px}
+
+  .toast{position:fixed;left:50%;bottom:1.3rem;transform:translateX(-50%) translateY(160%);
+    background:var(--panel-2);color:var(--txt);border:1px solid var(--signal-deep);
+    padding:.8rem 1.2rem;border-radius:8px;font-size:.88rem;font-weight:600;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);z-index:99;transition:transform .3s cubic-bezier(.2,.9,.3,1);
+    max-width:90%;text-align:center}
+  .toast.show{transform:translateX(-50%) translateY(0)}
+
+  .sheet{position:fixed;inset:0;background:rgba(5,9,11,.7);z-index:80;display:none;
+    align-items:flex-end;justify-content:center;backdrop-filter:blur(3px)}
+  .sheet.show{display:flex}
+  .sheet .panel{background:var(--bg-2);width:100%;max-width:560px;border-radius:16px 16px 0 0;
+    padding:1.4rem 1.1rem 1.7rem;border-top:1px solid var(--line);animation:up .25s ease}
+  @keyframes up{from{transform:translateY(100%)}to{transform:none}}
+  .sheet h3{font-size:1.1rem;margin-bottom:.35rem}
+  .sheet>.panel>p{font-size:.86rem;color:var(--txt-dim);margin-bottom:1.1rem}
+  .sheet .opt{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);
+    border-radius:8px;padding:.85rem .9rem;font-weight:600;font-size:.98rem;margin-bottom:.5rem;
+    cursor:pointer;color:var(--txt)}
+  .sheet .opt.safe{border-color:var(--safe)}
+  .sheet .opt.located{border-color:var(--located)}
+  .sheet .opt.hurt{border-color:var(--hurt)}
+  .sheet .opt.reunited{border-color:var(--reunited)}
+  .sheet .opt.gone{border-color:var(--gone)}
+  .sheet .cancel{background:none;border:none;color:var(--txt-faint);font-weight:600;font-size:.9rem;
+    margin-top:.4rem;cursor:pointer;width:100%;padding:.6rem}
+
+  footer{padding:1.3rem 1.1rem 6rem;color:var(--txt-faint);font-size:.74rem;
+    border-top:1px solid var(--line-soft);font-family:var(--mono);line-height:1.7}
+  footer .tools{display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap}
+  footer button{border:1px solid var(--line);background:var(--panel);border-radius:6px;
+    padding:.45rem .7rem;font-size:.7rem;font-family:var(--mono);letter-spacing:.03em;
+    cursor:pointer;color:var(--txt-dim);text-transform:uppercase}
+  .credit{display:inline-flex;align-items:center;gap:.45rem;margin-top:1.1rem;padding-top:.9rem;
+    border-top:1px solid var(--line-soft);color:var(--txt-faint);text-decoration:none;
+    font-family:var(--mono);font-size:.72rem;letter-spacing:.02em;text-transform:none;transition:color .15s}
+  .credit b{color:var(--txt-dim);font-weight:600}
+  .credit svg{flex:none;color:var(--txt-faint);transition:color .15s}
+  .credit:hover,.credit:focus-visible{color:var(--signal)}
+  .credit:hover b,.credit:focus-visible b{color:var(--signal)}
+  .credit:hover svg,.credit:focus-visible svg{color:var(--signal)}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="solidaridad">
+  <span class="flag">🇻🇪</span>
+  <span>Para el pueblo de Venezuela. Que cada familia vuelva a encontrarse.</span>
+</div>
+
+<div id="contadores" class="contadores">
+  <div class="cnt">
+    <div class="cnt-n" id="cntReg">7645</div>
+    <div class="cnt-l">registradas</div>
+  </div>
+  <div class="cnt cnt-ok">
+    <div class="cnt-n" id="cntApa">417</div>
+    <div class="cnt-l">reencontradas</div>
+  </div>
+  <div class="cnt cnt-conf">
+    <div class="cnt-n" id="cntConf">4921</div>
+    <div class="cnt-l">ubicadas sin confirmación</div>
+  </div>
+  <div class="cnt cnt-busca">
+    <div class="cnt-n" id="cntBus">1828</div>
+    <div class="cnt-l">buscando</div>
+  </div>
+</div>
+
+<div id="status" class="status on">
+  <span class="dot"></span>
+  <span id="statusText">Enlace activo · transmitiendo y consultando</span>
+  <span id="pending" class="pending" hidden="">0 en cola</span>
+</div>
+
+<div id="missingBar" class="missing-bar" onclick="showMissing()">
+  <span>⚠ Personas sin localizar</span>
+  <span class="n" id="missingCount">0</span>
+  <span class="go">ver →</span>
+</div>
+
+<div id="recordatorio" class="recordatorio" hidden="">
+  <div class="rec-txt">
+    <b>¿Ya apareció alguien que reportaste?</b>
+    <span id="recDetalle">Tienes personas marcadas como buscadas.</span>
+  </div>
+  <button class="rec-btn" onclick="verMisBuscados()">Revisar y actualizar</button>
+</div>
+
+<div id="install" class="install">
+  <span>Instala TeBusco para que reenvíe solo al volver la señal</span>
+  <button onclick="doInstall()">Instalar</button>
+</div>
+
+<!-- Botón flotante fijo de instalar -->
+<button id="fabInstall" class="fab-install" onclick="doInstall()">
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"></path>
+  </svg>
+  Instalar app
+</button>
+
+<!-- Instrucciones para iPhone (Apple no permite instalación automática) -->
+<div id="iosSheet" class="sheet" onclick="if(event.target===this)closeIos()">
+  <div class="panel">
+    <h3>Instalar en iPhone</h3>
+    <p>En iPhone se instala en dos toques, desde Safari:</p>
+    <ol class="ios-steps">
+      <li>Toca el botón <b>Compartir</b> ⬆️ (abajo, en el centro de Safari).</li>
+      <li>Baja y toca <b>"Agregar a inicio"</b>.</li>
+      <li>Toca <b>"Agregar"</b>. Listo, queda como una app.</li>
+    </ol>
+    <button class="cancel" onclick="closeIos()">Entendido</button>
+  </div>
+</div>
+
+<header>
+  <div class="mark">
+    <svg class="glyph" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="16" cy="16" r="14" stroke="#273a44" stroke-width="1.5"></circle>
+      <circle cx="16" cy="16" r="8" stroke="#1f8e84" stroke-width="1.5"></circle>
+      <circle cx="16" cy="16" r="2.5" fill="#39d4c4"></circle>
+      <path d="M16 2 V6 M16 26 V30 M2 16 H6 M26 16 H30" stroke="#39d4c4" stroke-width="1.5" stroke-linecap="round"></path>
+    </svg>
+    <h1>Te<span class="b">Busco</span></h1>
+  </div>
+  <div class="tagline">reúne familias · funciona sin señal</div>
+  <p>Cuando una catástrofe corta la comunicación, TeBusco ayuda a las familias a reencontrarse. Registra a quien veas o reporta a quien buscas: se guarda aunque no haya internet y se comparte al volver la señal.</p>
+  <div class="origen">
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle>
+    </svg>
+    <span>Creada en Calbuco, Chile — tierra que conoce los terremotos — para Venezuela</span>
+  </div>
+</header>
+
+<nav>
+  <button id="tabReport" class="active" onclick="show('report')">
+    <span>Registrar</span><span class="ico">REPORTE</span>
+  </button>
+  <button id="tabFind" onclick="show('find')">
+    <span>Buscar</span><span class="ico">CONSULTA</span>
+  </button>
+</nav>
+
+<main>
+  <section id="report" class="view active">
+    <p class="lead">Anota a cualquier persona: a salvo, herida, o alguien que <b>no encuentras</b>. Cada registro acerca a una familia a su gente.</p>
+
+    <div class="field">
+      <label>Nombre y apellido</label>
+      <input id="r_name" placeholder="María Fernanda Pérez" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Cédula <span class="opt">— opcional, facilita la búsqueda</span></label>
+      <input id="r_id" placeholder="V-12.345.678 (opcional)" autocomplete="off" inputmode="text" oninput="this.value=this.value.replace(/[^0-9VvEe.\-]/g,'').toUpperCase()" title="Cédula venezolana, ej: V-12.345.678 (puedes dejarlo vacío si no la sabes)">
+      <div id="r_id_aviso" style="font-size:12px;color:var(--search);margin-top:5px;display:none"></div>
+    </div>
+    <div class="field">
+      <label>Situación</label>
+      <div class="states" id="r_states">
+        <button type="button" data-s="search" aria-pressed="true">No aparece</button>
+        <button type="button" data-s="hurt" aria-pressed="false">Herido/a</button>
+        <button type="button" data-s="located" aria-pressed="false">Localizada · sin confirmar</button>
+        <button type="button" data-s="safe" aria-pressed="false">A salvo</button>
+        <button type="button" data-s="reunited" aria-pressed="false">Con familia</button>
+        <button type="button" data-s="gone" aria-pressed="false">Info sensible</button>
+      </div>
+      <div class="hint hint-search" id="hintSearch">Marcada como prioridad. Aparecerá primero para rescatistas y familias. Si alguien la encuentra, podrá actualizar su estado.</div>
+      <div class="hint hint-gone" id="hintGone">Usa esto cuando haya algo delicado que la familia deba saber en privado. No se muestran detalles públicamente; solo indica que deben contactarse. Úsalo con responsabilidad.</div>
+    </div>
+    <div class="field">
+      <label>Ubicación o último avistamiento</label>
+      <input id="r_place" placeholder="Refugio Catia La Mar / edificio en Los Palos Grandes" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Color de pulsera <span class="opt">— opcional</span></label>
+      <input id="r_pulsera_color" placeholder="Ej: roja, azul, verde, blanca" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Código de pulsera <span class="opt">— opcional</span></label>
+      <input id="r_pulsera_codigo" placeholder="Ej: A-142, 0078" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Detalle o señas <span class="opt">— opcional</span></label>
+      <textarea id="r_msg" placeholder="8 años, camiseta roja. Su mamá la busca. Avisar a Ana 0414-..."></textarea>
+    </div>
+    <div class="field">
+      <label>WhatsApp de contacto <span class="opt">— opcional, a quién avisar</span></label>
+      <input id="r_phone" placeholder="Ej: 0414 123 4567" autocomplete="off" inputmode="tel">
+    </div>
+    <div class="field">
+      <label>Registrado por <span class="opt">— opcional</span></label>
+      <input id="r_by" placeholder="Tu nombre, o 'Rescatista' / 'Vecino'" autocomplete="off">
+    </div>
+
+    <button id="r_save" class="big save" onclick="saveRecord()">Guardar registro</button>
+    <p class="note">Se guarda al instante en este equipo, aunque no haya señal. Al volver la conexión se transmite solo y queda disponible para todos.</p>
+  </section>
+
+  <section id="find" class="view">
+    <p class="lead">Busca por nombre o cédula. Los casos críticos —sin localizar y heridos— se muestran primero.</p>
+    <div class="field">
+      <label>Nombre o cédula</label>
+      <input id="q" placeholder="María Pérez  ·  V-12345678" autocomplete="off" oninput="runSearch()">
+    </div>
+    <button class="big find" onclick="runSearch()">Buscar</button>
+    <div id="count" class="count" hidden=""></div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<footer>
+  Datos en el equipo mientras no haya enlace. Sin cuentas, sin contraseñas.
+  <div class="tools">
+    <button onclick="exportData()">Exportar respaldo</button>
+  </div>
+  <p style="margin-top:.8rem;text-transform:none;letter-spacing:0">Hecho para Venezuela y para cualquier catástrofe donde la comunicación se caiga. Inspirado en lo vivido en Chile.</p>
+  <a class="credit" href="https://instagram.com/campoconwifi" target="_blank" rel="noopener">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+      <circle cx="12" cy="12" r="4"></circle>
+      <circle cx="17.2" cy="6.8" r="1.1" fill="currentColor" stroke="none"></circle>
+    </svg>
+    <span>Creado con cariño por <b>Andrés Torres</b> · @campoconwifi</span>
+  </a>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<div id="sheet" class="sheet">
+  <div class="panel">
+    <h3 id="sheetName">Actualizar a esta persona</h3>
+    <p>Alguien la encontró. ¿Cómo está ahora? Esto avisa a su familia y la retira de la lista de búsqueda.</p>
+    <input id="avisoNombre" type="text" placeholder="Tu nombre (quién avisa)" autocomplete="name" style="width:100%;padding:10px;margin-bottom:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2);color:inherit;box-sizing:border-box">
+    <input id="avisoTel" type="tel" placeholder="Tu teléfono (para confirmar)" autocomplete="tel" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg-2);color:inherit;box-sizing:border-box">
+    <button class="opt safe" onclick="resolveTo('safe')">Está a salvo</button>
+    <button class="opt hurt" onclick="resolveTo('hurt')">Está herida, recibe atención</button>
+    <button class="opt located" onclick="resolveTo('located')">La vieron (hospital/refugio), falta confirmar</button>
+    <button class="opt reunited" onclick="resolveTo('reunited')">Ya está con su familia</button>
+    <button class="opt gone" onclick="resolveTo('gone')">Hay algo delicado — contactar a la familia</button>
+    <button class="cancel" onclick="closeSheet()">Cancelar</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   TeBusco — localizador de personas en catástrofes (PWA offline-first)
+   Estética de centro de operaciones, ultraligera: sin imágenes,
+   sin fuentes externas, sin librerías. Un solo archivo cacheado.
+   Cinco estados ordenados por urgencia; los casos "no aparece"
+   y "herido" se priorizan. Un caso buscado se puede resolver al
+   encontrar a la persona. enviarAlServidor/buscarEnServidor están
+   simulados; reemplazar por API real en producción.
+============================================================ */
+
+const KEY='tebusco_v1';
+
+/* ===== CONFIGURACIÓN DEL SERVIDOR =====
+   TeBusco ya NO habla directo con la base de datos.
+   Habla con el "portero" (tebusco-portero.php), que esconde
+   la clave en el servidor y solo permite operaciones seguras.
+   Pon aquí la dirección de tu portero: */
+const PORTERO = 'tebusco-portero.php';   // <-- mismo dominio; o pon la URL completa si está en otro lado
+const SERVIDOR_LISTO = true;
+
+// helper: pide una operación al portero
+async function portero(op, datos){
+  const res = await fetch(PORTERO, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ op, ...datos })
+  });
+  if(!res.ok) throw new Error('portero ' + res.status);
+  return res.json();
+}
+
+let records=load();
+let vistos=new Map();   // todo lo que aparece en pantalla (local o del servidor), por uid
+let estado='search';
+let online=navigator.onLine;
+let simOnline=false;
+let deferredPrompt=null;
+
+// ¿es iPhone/iPad?
+const esIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+// ¿ya está corriendo como app instalada?
+const yaInstalada = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+
+function mostrarBotonInstalar(){
+  if(yaInstalada) return;                 // si ya está instalada, no molestamos
+  document.getElementById('fabInstall').classList.add('show');
+}
+// En Android, el navegador avisa cuando se puede instalar:
+window.addEventListener('beforeinstallprompt', e=>{
+  e.preventDefault(); deferredPrompt=e;
+  mostrarBotonInstalar();
+});
+// En iPhone no hay ese evento, así que mostramos el botón igual (llevará a las instrucciones):
+if(esIOS) mostrarBotonInstalar();
+
+function doInstall(){
+  if(deferredPrompt){                     // Android: instalación real
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(()=>{
+      deferredPrompt=null;
+      document.getElementById('fabInstall').classList.remove('show');
+      document.getElementById('install').classList.remove('show');
+    });
+  }else if(esIOS){                        // iPhone: mostrar instrucciones de Safari
+    document.getElementById('iosSheet').classList.add('show');
+  }else{
+    // navegador sin soporte directo: mostramos las instrucciones genéricas igual
+    document.getElementById('iosSheet').classList.add('show');
+  }
+}
+function closeIos(){ document.getElementById('iosSheet').classList.remove('show'); }
+
+window.addEventListener('appinstalled', ()=>{
+  document.getElementById('fabInstall').classList.remove('show');
+  document.getElementById('install').classList.remove('show');
+});
+let resolvingUid=null;
+
+function load(){ try{ return JSON.parse(localStorage.getItem(KEY))||[]; }catch(e){ return []; } }
+function persist(){ localStorage.setItem(KEY, JSON.stringify(records)); }
+
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+
+const STATE={
+  search:  {label:'NO APARECE', cls:'search',   rank:0},
+  hurt:    {label:'HERIDO/A',   cls:'hurt',     rank:1},
+  located: {label:'LOCALIZADA · SIN CONFIRMAR', cls:'located', rank:2},
+  safe:    {label:'A SALVO',    cls:'safe',     rank:3},
+  reunited:{label:'CON FAMILIA',cls:'reunited', rank:4},
+  gone:    {label:'INFO SENSIBLE', cls:'gone',  rank:5}
+};
+
+function show(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active', s.id===v));
+  document.getElementById('tabReport').classList.toggle('active', v==='report');
+  document.getElementById('tabFind').classList.toggle('active', v==='find');
+  if(v==='find'){ document.getElementById('q').focus(); runSearch(); }
+}
+
+document.getElementById('r_states').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  estado=b.dataset.s;
+  [...e.currentTarget.children].forEach(x=>x.setAttribute('aria-pressed', x===b));
+  document.getElementById('hintSearch').style.display = estado==='search'?'block':'none';
+  document.getElementById('hintGone').style.display   = estado==='gone'?'block':'none';
+});
+
+function cedulaValida(c){
+  // vacía = válida (es opcional)
+  if(!c || !c.trim()) return true;
+  // acepta formatos venezolanos flexibles:
+  // V-12345678, V12345678, 12345678, V-12.345.678, E-1234567, con o sin puntos/guion
+  // regla: opcional V/E, opcional guion, y entre 6 y 9 dígitos (con puntos opcionales)
+  const limpia = c.replace(/[.\-\s]/g,'').toUpperCase();
+  return /^[VE]?\d{6,9}$/.test(limpia);
+}
+
+function saveRecord(){
+  const name=val('r_name');
+  if(!name){ toast('Escribe al menos el nombre'); document.getElementById('r_name').focus(); return; }
+  // validar cédula (opcional, pero si la escriben debe tener formato razonable)
+  const cid=val('r_id');
+  const aviso=document.getElementById('r_id_aviso');
+  if(!cedulaValida(cid)){
+    aviso.textContent='Esa cédula no parece válida. Usa solo números (ej: V-12.345.678) o déjala vacía si no la sabes.';
+    aviso.style.display='block';
+    document.getElementById('r_id').focus();
+    return;
+  }
+  aviso.style.display='none';
+  if(estado==='gone' && !confirm('Vas a marcar este caso como información sensible. Solo úsalo si de verdad hay algo delicado que la familia deba saber. ¿Continuar?')) return;
+  const rec={
+    uid:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    name, cid:val('r_id'), state:estado, place:val('r_place'),
+    color_pulsera:val('r_pulsera_color'), codigo_pulsera:val('r_pulsera_codigo'),
+    msg:val('r_msg'), by:val('r_by'), phone:val('r_phone'), ts:Date.now(), synced:false
+  };
+  records.unshift(rec); persist(); clearForm(); updateStatus(); refreshMissing();
+  toast(isConnected()?'Registro guardado · transmitiendo':'Guardado · se transmitirá al volver la señal');
+  requestSync(); trySync();
+}
+
+function clearForm(){
+  ['r_name','r_id','r_place','r_pulsera_color','r_pulsera_codigo','r_msg','r_by','r_phone'].forEach(id=>document.getElementById(id).value='');
+  estado='search';
+  [...document.querySelectorAll('#r_states button')].forEach(x=>x.setAttribute('aria-pressed', x.dataset.s==='search'));
+  document.getElementById('hintSearch').style.display='block';
+  document.getElementById('hintGone').style.display='none';
+}
+
+async function requestSync(){
+  try{ const reg=await navigator.serviceWorker.ready; if('sync' in reg) await reg.sync.register('enviar-registros'); }catch(e){}
+}
+
+function openResolve(uid){
+  resolvingUid=uid;
+  const r=findRec(uid)||vistos.get(uid);
+  document.getElementById('sheetName').textContent='Actualizar a '+(r?r.name:'esta persona');
+  document.getElementById('avisoNombre').value='';
+  document.getElementById('avisoTel').value='';
+  document.getElementById('sheet').classList.add('show');
+}
+function closeSheet(){ document.getElementById('sheet').classList.remove('show'); resolvingUid=null; }
+function resolveTo(newState){
+  const r=findRec(resolvingUid)||vistos.get(resolvingUid); if(!r){ closeSheet(); return; }
+  if(newState==='gone' && !confirm('Vas a marcar este caso como información sensible, para que la familia se contacte en privado. ¿Continuar?')) return;
+  const avisoNombre=(document.getElementById('avisoNombre').value||'').trim();
+  const avisoTel=(document.getElementById('avisoTel').value||'').trim();
+  const updated={...r, state:newState, ts:Date.now(), synced:false};
+  const i=records.findIndex(x=>x.uid===r.uid);
+  if(i>=0) records[i]=updated; else records.unshift(updated);
+  persist(); closeSheet(); updateStatus(); refreshMissing(); runSearch();
+  // Actualiza SOLO el estado y guarda quién avisó (no revalida el nombre de la persona).
+  if(SERVIDOR_LISTO && isConnected()){
+    portero('actualizar_estado', { uid:r.uid, state:newState, nombre_persona:r.name, aviso_nombre:avisoNombre||null, aviso_telefono:avisoTel||null })
+      .then(()=>{ const k=records.findIndex(x=>x.uid===r.uid); if(k>=0){ records[k].synced=true; persist(); runSearch(); } })
+      .catch(()=>{ requestSync(); trySync(); });
+  } else {
+    requestSync(); trySync();
+  }
+  toast('Actualizado · gracias por cerrar el caso');
+}
+function findRec(uid){ return records.find(x=>x.uid===uid); }
+
+// Quita acentos/tildes para que "maria" encuentre a "María" y viceversa
+function sinAcentos(t){
+  return (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+async function runSearch(){
+  const qRaw=val('q');                       // texto original, con espacios
+  const q=sinAcentos(qRaw.toLowerCase()).replace(/[.\-\s]/g,''); // sin acentos, sin puntos/espacios
+  const box=document.getElementById('results');
+  const count=document.getElementById('count');
+  if(!q){ box.innerHTML=''; count.hidden=true; return; }
+  let hits=records.filter(r=>match(r,q));
+  if(isConnected()){
+    try{
+      const remotos=await buscarEnServidor(qRaw);  // al servidor le mandamos el texto con espacios
+      remotos.forEach(r=>{ if(!hits.some(h=>h.uid===r.uid)) hits.push(r); });
+    }catch(e){/* sin conexión real: seguimos con lo local */}
+  }
+  hits.sort((a,b)=> (STATE[a.state].rank-STATE[b.state].rank) || (b.ts-a.ts));
+  count.hidden=false;
+  count.textContent=hits.length
+    ? `${hits.length} ${hits.length===1?'coincidencia':'coincidencias'}${isConnected()?'':' · solo local · sin señal'}`
+    : '';
+  box.innerHTML=hits.length?hits.map(card).join(''):empty(val('q'));
+}
+
+async function showMissing(){
+  show('find');
+  const box=document.getElementById('results');
+  const count=document.getElementById('count');
+  let all=[...records];
+  if(isConnected()){
+    try{ all=all.concat(await buscarDesaparecidos()); }catch(e){}
+  }
+  let seen=new Set(); let miss=[];
+  all.forEach(r=>{ if(r.state==='search' && !seen.has(r.uid)){ seen.add(r.uid); miss.push(r); } });
+  miss.sort((a,b)=>b.ts-a.ts);
+  document.getElementById('q').value='';
+  count.hidden=false;
+  count.textContent = miss.length? `${miss.length} ${miss.length===1?'persona sin localizar':'personas sin localizar'}` : '';
+  box.innerHTML = miss.length? miss.map(card).join('') :
+    `<div class="empty">Sin personas marcadas como “no aparece” por ahora.</div>`;
+}
+
+function match(r,q){
+  const n=sinAcentos(r.name.toLowerCase()).replace(/\s/g,'');
+  const c=(r.cid||'').toLowerCase().replace(/[.\-\s]/g,'');
+  return n.includes(q)||(c&&c.includes(q));
+}
+
+function card(r){
+  vistos.set(r.uid, r);   // recordamos a esta persona aunque venga del servidor
+  const s=STATE[r.state]||STATE.safe;
+  return `<div class="card s-${r.state}">
+    <div class="top"><span class="name">${esc(r.name)}</span><span class="badge ${s.cls}">${s.label}</span></div>
+    <div class="meta">
+      ${r.cid?`<span><span class="k">cédula</span> <b>${esc(r.cid)}</b></span>`:''}
+      ${r.place?`<span><span class="k">${r.state==='search'?'último avistamiento':'ubicación'}</span> <b>${esc(r.place)}</b></span>`:''}
+      ${(r.color_pulsera||r.codigo_pulsera)?`<span><span class="k">pulsera</span> <b>${esc([r.color_pulsera,r.codigo_pulsera].filter(Boolean).join(' · '))}</b></span>`:''}
+      ${r.msg?`<span>${esc(r.msg)}</span>`:''}
+      <span><span class="k">actualizado</span> ${when(r.ts)}${r.by?` · ${esc(r.by)}`:''}</span>
+    </div>
+    ${(r.state==='search'&&r.phone)?`<div class="seeking">⚠ Alguien está buscando a esta persona. Si la encontraste, avísale:</div>`:''}
+    <div class="actions">
+      ${r.phone?`<a class="wa" href="${waLink(r)}" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15l-1.4 5 5.1-1.3A10 10 0 1 0 12 2Zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8 8 0 1 1 12 20Zm4.4-6c-.2-.1-1.4-.7-1.6-.8-.2-.1-.4-.1-.5.1l-.7.9c-.1.2-.3.2-.5.1a6.5 6.5 0 0 1-3.2-2.8c-.1-.2 0-.4.1-.5l.4-.5c.1-.1.1-.3 0-.4l-.7-1.7c-.2-.4-.4-.4-.5-.4h-.5c-.2 0-.4.1-.6.3a3 3 0 0 0-1 2.3c0 1.3 1 2.6 1.1 2.8.1.2 1.9 3 4.7 4.1 1.7.7 2.3.8 3.1.7.5-.1 1.4-.6 1.6-1.1.2-.5.2-1 .1-1.1l-.4-.3Z"/></svg>
+        Escribir por WhatsApp
+      </a>`:''}
+      ${r.state==='search'
+        ? `<button class="resolve-aparecio" onclick="openResolve('${r.uid}')">✓ ¡Apareció! Marcar que la encontré</button>`
+        : `<button class="resolve-aparecio" style="background:var(--bg-2);color:inherit;border:1px solid var(--line)" onclick="openResolve('${r.uid}')">✎ Actualizar estado</button>`}
+    </div>
+    ${r.synced===false?`<div class="pendrow">
+       <span class="unsynced">⏳ en cola · se enviará al volver la señal</span>
+     </div>`:''}
+  </div>`;
+}
+
+function empty(nombre){
+  const safe=esc(nombre);
+  return `<div class="empty">Nadie ha registrado a <b>${safe}</b> todavía.<br><br>
+  Puedes dejar constancia de que lo buscas: quedará en la lista de personas sin localizar, y quien lo encuentre podrá avisarte por WhatsApp.
+  <button class="seek" onclick="seekPerson('${safe.replace(/'/g,"\\'")}')">➕ Estoy buscando a ${safe}</button></div>`;
+}
+
+// Crear un registro "no aparece" desde una búsqueda vacía, dejando el WhatsApp de quien busca
+function seekPerson(nombre){
+  const phone=prompt('Para que quien lo encuentre pueda avisarte, deja tu WhatsApp (opcional pero recomendado):\n\nEj: 0414 123 4567');
+  // si cancela el prompt (null), no seguimos; si lo deja vacío, igual se registra sin contacto
+  if(phone===null) return;
+  const rec={
+    uid:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    name:nombre, cid:'', state:'search', place:'',
+    msg:'Reportado como persona buscada por un familiar/conocido.',
+    by:'Búsqueda', phone:(phone||'').trim(), ts:Date.now(), synced:false
+  };
+  records.unshift(rec); persist(); updateStatus(); refreshMissing();
+  requestSync(); trySync();
+  toast('Registrado como buscado. Quien lo encuentre podrá avisarte.');
+  runSearch();
+}
+
+
+function waLink(r){
+  // limpia el número: deja solo dígitos. Si no trae código país, asume Venezuela (58).
+  let n=(r.phone||'').replace(/\D/g,'');
+  if(n.startsWith('0')) n=n.slice(1);            // quita el 0 inicial local
+  if(!n.startsWith('58') && n.length<=10) n='58'+n; // antepone Venezuela si hace falta
+  const texto=`Hola, vi en TeBusco el registro de ${r.name}. Te escribo por eso.`;
+  return `https://wa.me/${n}?text=${encodeURIComponent(texto)}`;
+}
+
+function isConnected(){ return online||simOnline; }
+
+function updateStatus(){
+  const el=document.getElementById('status');
+  const txt=document.getElementById('statusText');
+  const pend=document.getElementById('pending');
+  const n=records.filter(r=>!r.synced).length;
+  if(isConnected()){ el.className='status on'; txt.textContent='Enlace activo · transmitiendo y consultando'; }
+  else{ el.className='status off'; txt.textContent='Enlace caído · datos guardados localmente'; }
+  pend.hidden=n===0; pend.textContent=n+' en cola';
+}
+
+function refreshMissing(){
+  let seen=new Set(); let n=0;
+  records.forEach(r=>{ if(r.state==='search' && !seen.has(r.uid)){ seen.add(r.uid); n++; } });
+  document.getElementById('missingCount').textContent=n;
+  document.getElementById('missingBar').classList.toggle('show', n>0);
+  refreshRecordatorio();
+}
+
+// Recordatorio: si ESTE teléfono tiene personas que reportó como buscadas, invita a actualizarlas
+function refreshRecordatorio(){
+  const mios=records.filter(r=>r.state==='search');
+  const rec=document.getElementById('recordatorio');
+  if(!mios.length){ rec.hidden=true; return; }
+  rec.hidden=false;
+  const det=document.getElementById('recDetalle');
+  det.textContent = mios.length===1
+    ? `Marcaste a ${mios[0].name} como buscado/a. Si ya apareció, actualízalo aquí.`
+    : `Tienes ${mios.length} personas marcadas como buscadas. ¿Alguna ya apareció?`;
+}
+
+// Lleva a la búsqueda mostrando los que este teléfono reportó como buscados
+function verMisBuscados(){
+  show('find');
+  const box=document.getElementById('results');
+  const count=document.getElementById('count');
+  const mios=records.filter(r=>r.state==='search').sort((a,b)=>b.ts-a.ts);
+  document.getElementById('q').value='';
+  count.hidden=false;
+  count.textContent = mios.length? `${mios.length} que reportaste · toca “La encontré” cuando aparezca` : '';
+  box.innerHTML = mios.length? mios.map(card).join('') :
+    `<div class="empty">No tienes personas marcadas como buscadas.</div>`;
+}
+
+let sincronizando=false;
+async function trySync(){
+  if(!isConnected() || !SERVIDOR_LISTO){ updateStatus(); return; }
+  if(sincronizando) return;            // evita envíos duplicados simultáneos
+  const pend=records.filter(r=>!r.synced);
+  if(!pend.length){ updateStatus(); return; }
+  sincronizando=true;
+  let enviados=0;
+  for(const r of pend){
+    try{
+      await enviarAlServidor(r);       // espera confirmación del servidor
+      r.synced=true; enviados++;
+    }catch(e){
+      // si falla uno, lo dejamos en cola y reintentamos luego
+      break;
+    }
+  }
+  persist(); sincronizando=false; updateStatus(); refreshMissing();
+  if(document.getElementById('find').classList.contains('active')) runSearch();
+  if(enviados) toast(`${enviados} ${enviados===1?'registro transmitido':'registros transmitidos'}`);
+}
+
+/* ===== SERVIDOR REAL (Supabase) =====
+   Reemplaza la versión simulada. Si aún no pegaste las claves
+   (SERVIDOR_LISTO=false), la app sigue funcionando solo local. */
+
+// Sube o actualiza un registro a través del portero
+async function enviarAlServidor(r){
+  if(!SERVIDOR_LISTO) return false;
+  const registro={ uid:r.uid, name:r.name, cid:r.cid||null, state:r.state,
+               place:r.place||null, color_pulsera:r.color_pulsera||null, codigo_pulsera:r.codigo_pulsera||null,
+               msg:r.msg||null, by_who:r.by||null, phone:r.phone||null, ts:r.ts };
+  const resp = await portero('reportar', { registro });
+  if(!resp || !resp.ok) throw new Error('no se pudo guardar');
+  return true;
+}
+
+// Busca en el servidor por nombre o cédula (vía portero)
+async function buscarEnServidor(qRaw){
+  if(!SERVIDOR_LISTO) return [];
+  const texto=(qRaw||'').trim();
+  if(!texto) return [];
+  let rows=[];
+  try{
+    rows = await portero('buscar', { q: texto });
+    if(!Array.isArray(rows)) rows = [];
+  }catch(e){ rows=[]; }
+  // Filtro fino en el cliente: el portero puede traer de más por los comodines,
+  // nos quedamos con los que de verdad contienen el texto (ignorando acentos).
+  const qLimpio=sinAcentos(texto.toLowerCase()).replace(/[.\-\s]/g,'');
+  const mapeados=rows.map(mapFila);
+  return mapeados.filter(r=>{
+    const nombreLimpio=sinAcentos((r.name||'').toLowerCase()).replace(/\s/g,'');
+    const cedLimpia=(r.cid||'').toLowerCase().replace(/[.\-\s]/g,'');
+    return nombreLimpio.includes(qLimpio) || (cedLimpia && cedLimpia.includes(qLimpio));
+  });
+}
+
+// Trae las personas marcadas como "no aparece" (vía portero)
+async function buscarDesaparecidos(){
+  if(!SERVIDOR_LISTO) return [];
+  try{
+    const rows = await portero('desaparecidos', {});
+    return Array.isArray(rows) ? rows.map(mapFila) : [];
+  }catch(e){ return []; }
+}
+
+// Convierte una fila del servidor al formato que usa la app
+function mapFila(f){
+  return { uid:f.uid, name:f.name, cid:f.cid||'', state:f.state, place:f.place||'',
+           color_pulsera:f.color_pulsera||'', codigo_pulsera:f.codigo_pulsera||'',
+           msg:f.msg||'', by:f.by_who||'', phone:f.phone||'', ts:Number(f.ts), synced:true };
+}
+
+window.addEventListener('online', ()=>{ online=true; updateStatus(); refreshMissing(); requestSync(); trySync(); toast('Señal recuperada'); });
+window.addEventListener('offline',()=>{ online=false; updateStatus(); refreshMissing(); });
+
+function exportData(){
+  if(!records.length){ toast('No hay registros para exportar'); return; }
+  const text=records.map(r=>{
+    const s=STATE[r.state].label;
+    return `${r.name}${r.cid?' ('+r.cid+')':''} — ${s}${r.place?' — '+r.place:''}${r.msg?' — '+r.msg:''}`;
+  }).join('\n');
+  const blob=new Blob([text],{type:'text/plain'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='tebusco-respaldo.txt'; a.click(); toast('Respaldo descargado');
+}
+
+function val(id){ return document.getElementById(id).value.trim(); }
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function when(ts){
+  const m=Math.floor((Date.now()-ts)/60000);
+  if(m<1)return'hace instantes'; if(m<60)return`hace ${m} min`;
+  const h=Math.floor(m/60); if(h<24)return`hace ${h} h`;
+  return new Date(ts).toLocaleDateString('es-VE');
+}
+let toastT;
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2800); }
+
+updateStatus(); refreshMissing(); trySync();
+
+/* ===== Contador de visitas anónimo =====
+   Registra que "alguien entró", sin guardar quién. Genera un id de sesión
+   aleatorio que solo vive en este navegador, para no contar la misma
+   pestaña muchas veces. */
+(function pingVisita(){
+  if(!SERVIDOR_LISTO) return;
+  let sesion=sessionStorage.getItem('tb_sesion');
+  if(sesion) return; // ya contamos esta sesión
+  sessionStorage.setItem('tb_sesion', Math.random().toString(36).slice(2,10));
+  portero('visita', {}).catch(()=>{/* si falla, no pasa nada */});
+})();
+
+/* ===== Contadores públicos (vía portero) ===== */
+async function cargarContadores(){
+  if(!SERVIDOR_LISTO) return;
+  try{
+    const c = await portero('contadores', {});
+    if(!c) return;
+    document.getElementById('cntReg').textContent = c.total||0;
+    document.getElementById('cntApa').textContent = (c.safe||0) + (c.reunited||0);  // reencontradas
+    document.getElementById('cntConf').textContent = c.located||0;
+    document.getElementById('cntBus').textContent = c.search||0;
+  }catch(e){/* si falla, quedan en '—' */}
+}
+cargarContadores();
+</script>
+
+
+</body></html>

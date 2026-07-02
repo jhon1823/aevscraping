@@ -21,12 +21,18 @@ from datetime import datetime, timezone
 # ===== SCRAPERS UBICADOS EN LA CARPETA JHON1823 =====
 from jhon1823.hospitalesenvenezuela import scraper as hospitalesenvenezuela
 from jhon1823.localizapacientes import scraper as localizapacientes
+from jhon1823.reencuentro import scraper as reencuentro
+from jhon1823.tebusco import scraper as tebusco
+from jhon1823.reencuentra import scraper as reencuentra
+from jhon1823.reunevzla import scraper as reunevzla
+from jhon1823.encuentralove import scraper as encuentralove
+from jhon1823.terremotovenezuela import scraper as terremotovenezuela
 # from jhon1823.venezuelareporta import scraper as venezuelareporta  # (descomentar cuando esté listo)
 
 BASE_DIR   = Path(__file__).parent
 AMILKIR    = BASE_DIR / "Amilkir"
 CHIKI      = BASE_DIR / "chiki"
-JHON1823   = BASE_DIR / "jhon1823"          
+JHON1823   = BASE_DIR / "jhon1823"
 DATOS      = BASE_DIR / "datos_consolidados"
 LOGS       = BASE_DIR / "logs"
 
@@ -63,9 +69,12 @@ def limpiar_y_deduplicar(records):
     """
     print("🧹 Aplicando limpieza y deduplicación...")
 
+    # FILTRAR REGISTROS QUE NO SEAN DICCIONARIOS O SEAN None
+    records = [r for r in records if isinstance(r, dict)]
+
     # ===== PASO 1: Filtrar registros sin nombre válido =====
     def tiene_nombre_valido(r):
-        nombre = r.get('nombre', '').strip()
+        nombre = str(r.get('nombre', '')).strip()
         if not nombre:
             return False
         if len(nombre) < 3:
@@ -86,7 +95,7 @@ def limpiar_y_deduplicar(records):
 
     # ===== PASO 2: Separar nombres compuestos =====
     def separar_nombres_compuestos(record):
-        nombre = record.get('nombre', '').strip()
+        nombre = str(record.get('nombre', '')).strip()
         if ' y ' in nombre or ' & ' in nombre or ',' in nombre:
             nombre_limpio = re.sub(r'[,&]', ' y', nombre)
             partes = nombre_limpio.split(' y ')
@@ -232,7 +241,7 @@ def merge_all():
 
 
 def compress_json():
-    """Comprime el archivo JSON consolidado en un archivo ZIP para ahorrar espacio y cumplir límites."""
+    """Comprime el archivo JSON consolidado en un archivo ZIP."""
     todos_path = DATOS / "todos_registros.json"
     zip_path = DATOS / "todos_registros.zip"
     if not todos_path.exists():
@@ -286,7 +295,55 @@ def main():
     except Exception as e:
         log(f"ERROR en localizapacientes: {e}")
 
-    # venezuelareporta (descomentar cuando esté listo)
+    # reencuentro
+    try:
+        log(">>> reencuentro")
+        reenc_records = reencuentro.run(str(DATOS))
+        log(f"OK: reencuentro -> {len(reenc_records)} registros")
+    except Exception as e:
+        log(f"ERROR en reencuentro: {e}")
+
+    # tebusco (fuente principal — API tebusco-portero.php)
+    try:
+        log(">>> tebusco")
+        tebusco_records = tebusco.run(str(DATOS))
+        log(f"OK: tebusco -> {len(tebusco_records)} registros")
+    except Exception as e:
+        log(f"ERROR en tebusco: {e}")
+
+    # reencuentra-ve.vercel.app (mirror de tebusco.app)
+    try:
+        log(">>> reencuentra")
+        reencuentra_records = reencuentra.run(str(DATOS))
+        log(f"OK: reencuentra -> {len(reencuentra_records)} registros")
+    except Exception as e:
+        log(f"ERROR en reencuentra: {e}")
+
+    # reunevzla.org (mirror de tebusco.app)
+    try:
+        log(">>> reunevzla")
+        reunevzla_records = reunevzla.run(str(DATOS))
+        log(f"OK: reunevzla -> {len(reunevzla_records)} registros")
+    except Exception as e:
+        log(f"ERROR en reunevzla: {e}")
+
+    # encuentralove.com (redirige a tebusco.app)
+    try:
+        log(">>> encuentralove")
+        encuentralove_records = encuentralove.run(str(DATOS))
+        log(f"OK: encuentralove -> {len(encuentralove_records)} registros")
+    except Exception as e:
+        log(f"ERROR en encuentralove: {e}")
+
+    # terremotovenezuela.app (redirige a tebusco.app)
+    try:
+        log(">>> terremotovenezuela")
+        terremotovenezuela_records = terremotovenezuela.run(str(DATOS))
+        log(f"OK: terremotovenezuela -> {len(terremotovenezuela_records)} registros")
+    except Exception as e:
+        log(f"ERROR en terremotovenezuela: {e}")
+
+    # venezuelareporta (comentado hasta que esté listo)
     # try:
     #     log(">>> venezuelareporta")
     #     venezuela_records = venezuelareporta.run(str(DATOS))
@@ -364,3 +421,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
