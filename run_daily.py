@@ -23,10 +23,17 @@ from jhon1823.hospitalesenvenezuela import scraper as hospitalesenvenezuela
 from jhon1823.localizapacientes import scraper as localizapacientes
 from jhon1823.reencuentro import scraper as reencuentro
 from jhon1823.tebusco import scraper as tebusco
-from jhon1823.reencuentra import scraper as reencuentra
-from jhon1823.reunevzla import scraper as reunevzla
-from jhon1823.encuentralove import scraper as encuentralove
-from jhon1823.terremotovenezuela import scraper as terremotovenezuela
+# reencuentra-ve.vercel.app, reunevzla.org, encuentralove.com y terremotovenezuela.app
+# NO son mirrors/redirects de tebusco.app (se creyó eso por error; verificado en vivo
+# el 2026-07-02: los 4 dominios sirven HTML propio, cero referencias a "tebusco").
+# Los scrapers que los trataban como mirrors se eliminaron por generar datos con
+# fuente mal etiquetada. Ver docs/evaluacion-fuentes.md (PR Café) para su estado real.
+#
+# reencuentra-ve.vercel.app SÍ es una fuente real e independiente (~95k personas,
+# no requiere Turnstile para leer). Scraper nuevo ubicado en scrapers/reencuentra/
+# siguiendo la convención de la PR de refactor de Café (scrapers/<fuente>/scraper.py
+# + README.md + test_scraper.py), no en jhon1823/.
+from scrapers.reencuentra import scraper as reencuentra_ve
 # from jhon1823.venezuelareporta import scraper as venezuelareporta  # (descomentar cuando esté listo)
 
 BASE_DIR   = Path(__file__).parent
@@ -137,28 +144,6 @@ def limpiar_y_deduplicar(records):
         grupos[clave].append(r)
 
     prioridad = {'Localizado': 1, 'Desaparecido': 2}
-    # tebusco.app y sus mirrors (reencuentra-ve.vercel.app, reunevzla.org,
-    # encuentralove.com, terremotovenezuela.app) comparten el mismo backend y
-    # por lo tanto generan registros duplicados con igual nombre/edad/ciudad.
-    # Sin este desempate, el ganador quedaba determinado por el orden alfabético
-    # en que merge_all() recorre los JSON (ej. "encuentralove.com" ganaba
-    # siempre sobre "tebusco.app" solo por venir antes en el glob), lo cual
-    # atribuía todos los registros al mirror en vez de a la fuente real.
-    FUENTE_CANONICA_TEBUSCO = 'tebusco.app'
-    FUENTES_MIRROR_TEBUSCO = {
-        'reencuentra-ve.vercel.app',
-        'reunevzla.org',
-        'encuentralove.com',
-        'terremotovenezuela.app',
-    }
-
-    def _prioridad_fuente(fuente):
-        if fuente == FUENTE_CANONICA_TEBUSCO:
-            return 0
-        if fuente in FUENTES_MIRROR_TEBUSCO:
-            return 1
-        return 0
-
     deduped = []
     for clave, grupo in grupos.items():
         if len(grupo) == 1:
@@ -166,10 +151,7 @@ def limpiar_y_deduplicar(records):
             continue
         grupo_ordenado = sorted(
             grupo,
-            key=lambda x: (
-                prioridad.get(x.get('estado', ''), 3),
-                _prioridad_fuente(x.get('fuente', '')),
-            )
+            key=lambda x: prioridad.get(x.get('estado', ''), 3)
         )
         deduped.append(grupo_ordenado[0])
 
@@ -348,37 +330,22 @@ def main():
     except Exception as e:
         log(f"ERROR en tebusco: {e}")
 
-    # reencuentra-ve.vercel.app (mirror de tebusco.app)
+    # reencuentra-ve.vercel.app (fuente real, ~95k personas; NO es mirror de
+    # tebusco.app — error corregido el 2026-07-02). Cobertura parcial (~25k de
+    # ~95k) por el tope de ~85-90 resultados por combinación de filtros.
     try:
-        log(">>> reencuentra")
-        reencuentra_records = reencuentra.run(str(DATOS))
-        log(f"OK: reencuentra -> {len(reencuentra_records)} registros")
+        log(">>> reencuentra-ve.vercel.app")
+        reencuentra_records = reencuentra_ve.run(str(DATOS))
+        log(f"OK: reencuentra-ve.vercel.app -> {len(reencuentra_records)} registros")
     except Exception as e:
-        log(f"ERROR en reencuentra: {e}")
+        log(f"ERROR en reencuentra-ve.vercel.app: {e}")
 
-    # reunevzla.org (mirror de tebusco.app)
-    try:
-        log(">>> reunevzla")
-        reunevzla_records = reunevzla.run(str(DATOS))
-        log(f"OK: reunevzla -> {len(reunevzla_records)} registros")
-    except Exception as e:
-        log(f"ERROR en reunevzla: {e}")
-
-    # encuentralove.com (redirige a tebusco.app)
-    try:
-        log(">>> encuentralove")
-        encuentralove_records = encuentralove.run(str(DATOS))
-        log(f"OK: encuentralove -> {len(encuentralove_records)} registros")
-    except Exception as e:
-        log(f"ERROR en encuentralove: {e}")
-
-    # terremotovenezuela.app (redirige a tebusco.app)
-    try:
-        log(">>> terremotovenezuela")
-        terremotovenezuela_records = terremotovenezuela.run(str(DATOS))
-        log(f"OK: terremotovenezuela -> {len(terremotovenezuela_records)} registros")
-    except Exception as e:
-        log(f"ERROR en terremotovenezuela: {e}")
+    # NOTA: reunevzla.org, encuentralove.com y terremotovenezuela.app siguen
+    # pendientes de scraper propio (no son mirrors de tebusco.app tampoco):
+    #   - reunevzla.org: Next.js + Supabase server-side + posible Turnstile
+    #   - encuentralove.com: backend Express/Render propio (estaba caído al evaluar)
+    #   - terremotovenezuela.app: portal de coordinación, no es registro de personas
+    # Ver docs/evaluacion-fuentes.md para el detalle.
 
     # venezuelareporta (comentado hasta que esté listo)
     # try:

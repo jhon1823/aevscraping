@@ -1,5 +1,3 @@
-import urllib.request
-import urllib.parse
 import json
 import csv
 import sys
@@ -9,8 +7,20 @@ import uuid
 import hashlib
 from datetime import datetime, timezone
 
-SUPABASE_URL = "https://cpavwkdonvkvrwygfzfo.supabase.co"
-ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwYXZ3a2RvbnZrdnJ3eWdmemZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIzNjAyODMsImV4cCI6MjA5NzkzNjI4M30.-_FAsA2csTrB9qt267pBfjJkczMP7pcaUi4plMv3kv4"
+import requests
+
+# NOTA (2026-07-02): redayudavenezuela.com migró de exponer su tabla de
+# Supabase directamente al cliente (vía anon key) a un endpoint propio
+# '/api/data' que hace de proxy — el mismo patrón que adoptó tebusco.app
+# con su 'tebusco-portero.php'. La anon key vieja ya no tiene permisos
+# (401 'permission denied for table missing_persons': el rol 'anon' fue
+# revocado en Supabase). El sitio ahora sirve los datos vía POST JSON a
+# este endpoint, sin autenticación, con paginación de 40 registros/página.
+API_URL = "https://redayudavenezuela.com/api/data"
+PAGE_SIZE = 40
+REQUEST_DELAY = 0.15  # segundos entre páginas (cortesía con el servidor)
+REQUEST_TIMEOUT = 30
+RETRIES = 3
 
 def map_id(val):
     if not val:
@@ -89,25 +99,32 @@ def map_row(item):
         estado = "Localizado"
     else:
         estado = "Desaparecido"
-        
+
     # ubicacion_encontrado, encontrado_por, encontrado_por_cedula: YES NULL
-    ubicacion_encontrado = None
-    encontrado_por = None
+    # (la API nueva sí entrega found_note/found_by/found_contact cuando el
+    # registro está 'found'; antes no había forma de obtenerlos)
+    if status == "found":
+        ubicacion_encontrado = item.get("found_note") or ultima_ubicacion
+        encontrado_por = item.get("found_by")
+    else:
+        ubicacion_encontrado = None
+        encontrado_por = None
     encontrado_por_cedula = None
-    
+
     # foto_url: text, YES NULL
     foto_url = item.get("photo_url")
     if foto_url:
         foto_url = str(foto_url).strip()
     else:
         foto_url = None
-        
+
     # fecha_registro: timestamptz, NOT NULL
     fecha_registro = map_timestamp(item.get("ext_created"))
-    
+
     # fecha_actualizacion: timestamptz, NOT NULL
-    fecha_actualizacion = map_timestamp(item.get("synced_at"))
-    if not item.get("synced_at"):
+    # (para 'found', preferimos located_at si existe: es la fecha real de localización)
+    fecha_actualizacion = map_timestamp(item.get("located_at") or item.get("synced_at"))
+    if not item.get("located_at") and not item.get("synced_at"):
         fecha_actualizacion = fecha_registro
         
     # es_menor: boolean, NOT NULL
@@ -132,24 +149,26 @@ def map_row(item):
         "fuente": "redayudavenezuela"
     }
 
-def fetch_chunk(status, offset, limit=1000):
-    url = f"{SUPABASE_URL}/rest/v1/missing_persons?select=*&status=eq.{status}&order=ext_created.desc"
-    # Set pagination headers
-    req = urllib.request.Request(
-        url,
-        headers={
-            "apikey": ANON_KEY,
-            "Authorization": f"Bearer {ANON_KEY}",
-            "Range": f"{offset}-{offset + limit - 1}"
-        }
-    )
-    try:
-        with urllib.request.urlopen(req) as response:
-            content = response.read().decode('utf-8')
-            return json.loads(content)
-    except Exception as e:
-        print(f"\nError fetching chunk starting at {offset}: {e}", file=sys.stderr)
-        return None
+def fetch_page(session, status, page, retries=RETRIES):
+    """Descarga una página (40 registros) desde /api/data. Reintenta con backoff."""
+    payload = {"op": "missing_search", "term": "", "status": status, "page": page}
+    for attempt in range(1, retries + 1):
+        try:
+            resp = session.post(API_URL, json=payload, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            data = resp.json()
+            if not data.get("ok"):
+                print(f"\nError de API en página {page}: {data}", file=sys.stderr)
+                return None
+            return data.get("data") or []
+        except (requests.RequestException, ValueError) as e:
+            if attempt == retries:
+                print(f"\nError fetching página {page}: {e}", file=sys.stderr)
+                return None
+            wait = attempt * 2
+            print(f"\n[retry {attempt}/{retries}] página {page}: {e} — esperando {wait}s", file=sys.stderr)
+            time.sleep(wait)
+    return None
 
 def main():
     parser = argparse.ArgumentParser(description="Exporta la lista de personas desaparecidas de Red Ayuda Venezuela y la adapta al esquema de base de datos.")
@@ -178,11 +197,10 @@ def main():
         print(f"Límite de descarga: {args.limit} registros")
     print("----------------------------------------------------")
 
-    offset = 0
-    chunk_size = 1000
+    page = 0
     total_written = 0
     all_rows = []
-    
+
     headers = [
         "id", "nombre", "cedula", "edad", "ultima_ubicacion",
         "telefono_contacto", "observaciones", "estado",
@@ -190,28 +208,26 @@ def main():
         "foto_url", "fecha_registro", "fecha_actualizacion", "es_menor", "fuente"
     ]
 
+    session = requests.Session()
+    session.headers.update({
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; RedAyudaVenezuelaScraper/1.0)",
+        "Referer": "https://redayudavenezuela.com/desaparecidos",
+    })
+
     try:
         while True:
-            # Check limit
             if args.limit and total_written >= args.limit:
                 print(f"\nLímite de {args.limit} registros alcanzado.")
                 break
-                
-            current_limit = chunk_size
-            if args.limit and total_written + chunk_size > args.limit:
-                current_limit = args.limit - total_written
 
-            print(f"\rDescargando registros desde el índice {offset}... ", end="", flush=True)
-            
-            chunk = fetch_chunk(args.status, offset, current_limit)
+            print(f"\rDescargando página {page} (acumulado: {total_written})... ", end="", flush=True)
+
+            chunk = fetch_page(session, args.status, page)
             if chunk is None:
-                # Retry once
-                print("Reintentando en 3 segundos...")
-                time.sleep(3)
-                chunk = fetch_chunk(args.status, offset, current_limit)
-                if chunk is None:
-                    print("Error persistente. Deteniendo descarga.")
-                    break
+                print("Error persistente. Deteniendo descarga.")
+                break
 
             if not chunk:
                 print("\nNo hay más registros disponibles.")
@@ -221,11 +237,15 @@ def main():
                 row = map_row(item)
                 all_rows.append(row)
                 total_written += 1
+                if args.limit and total_written >= args.limit:
+                    break
 
-            offset += len(chunk)
-            
-            # Simple sleep to be polite with the server API
-            time.sleep(0.1)
+            # Si la página vino incompleta, era la última.
+            if len(chunk) < PAGE_SIZE:
+                break
+
+            page += 1
+            time.sleep(REQUEST_DELAY)
 
         # Write files if we have data
         if all_rows:
