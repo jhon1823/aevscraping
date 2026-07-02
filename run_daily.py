@@ -137,6 +137,28 @@ def limpiar_y_deduplicar(records):
         grupos[clave].append(r)
 
     prioridad = {'Localizado': 1, 'Desaparecido': 2}
+    # tebusco.app y sus mirrors (reencuentra-ve.vercel.app, reunevzla.org,
+    # encuentralove.com, terremotovenezuela.app) comparten el mismo backend y
+    # por lo tanto generan registros duplicados con igual nombre/edad/ciudad.
+    # Sin este desempate, el ganador quedaba determinado por el orden alfabético
+    # en que merge_all() recorre los JSON (ej. "encuentralove.com" ganaba
+    # siempre sobre "tebusco.app" solo por venir antes en el glob), lo cual
+    # atribuía todos los registros al mirror en vez de a la fuente real.
+    FUENTE_CANONICA_TEBUSCO = 'tebusco.app'
+    FUENTES_MIRROR_TEBUSCO = {
+        'reencuentra-ve.vercel.app',
+        'reunevzla.org',
+        'encuentralove.com',
+        'terremotovenezuela.app',
+    }
+
+    def _prioridad_fuente(fuente):
+        if fuente == FUENTE_CANONICA_TEBUSCO:
+            return 0
+        if fuente in FUENTES_MIRROR_TEBUSCO:
+            return 1
+        return 0
+
     deduped = []
     for clave, grupo in grupos.items():
         if len(grupo) == 1:
@@ -144,7 +166,10 @@ def limpiar_y_deduplicar(records):
             continue
         grupo_ordenado = sorted(
             grupo,
-            key=lambda x: prioridad.get(x.get('estado', ''), 3)
+            key=lambda x: (
+                prioridad.get(x.get('estado', ''), 3),
+                _prioridad_fuente(x.get('fuente', '')),
+            )
         )
         deduped.append(grupo_ordenado[0])
 
@@ -163,9 +188,21 @@ def merge_all():
     store = {}
     if todos_path.exists():
         try:
+            huerfanos = 0
             for r in json.loads(todos_path.read_text(encoding="utf-8")):
-                key = f"{r.get('id')}|{r.get('fuente', '')}"
+                fuente = r.get('fuente', '')
+                if not fuente:
+                    # Registro sin 'fuente' identificable: no se puede re-vincular
+                    # con ningún scraper (suele venir de un bug de esquema ya
+                    # corregido, ej. reencuentro/scraper.py usaba '_fuente' en vez
+                    # de 'fuente'). Se descarta para que el propio scraper lo
+                    # regenere correctamente en esta misma corrida.
+                    huerfanos += 1
+                    continue
+                key = f"{r.get('id')}|{fuente}"
                 store[key] = r
+            if huerfanos:
+                log(f"Descartados {huerfanos} registros huérfanos sin 'fuente' (se regeneran desde el scraper de origen)")
             log(f"Store existente cargado: {len(store)} registros")
         except Exception as e:
             log(f"Advertencia al cargar store: {e}  (se iniciará vacío)")

@@ -77,29 +77,30 @@ def _normalize_gender(gender: str | None) -> str | None:
 
 
 def _build_record(raw: dict[str, Any]) -> dict[str, Any]:
-    """Transforma un registro crudo de la API al esquema unificado de 16 campos."""
+    """Transforma un registro crudo de la API al esquema unificado de 16 campos del proyecto."""
 
     # Edad: la API devuelve age_min / age_max (suelen ser iguales)
     age = raw.get("age_min") or raw.get("age_max")
-    age_str = str(age) if age is not None else None
+    age_str = str(age) if age is not None else ""
 
     # Estado: priorizar el campo status interno; fallback al kind
     raw_status = raw.get("status", "")
-    status = STATUS_MAP.get(raw_status, KIND_TO_STATUS.get(raw.get("kind", ""), "Desconocido"))
+    status = STATUS_MAP.get(raw_status, KIND_TO_STATUS.get(raw.get("kind", ""), "Desaparecido"))
+    es_localizado = status == "Localizado"
 
     # Teléfono: no hay campo dedicado; extraer de description si existe
-    phone = _extract_phone(raw.get("description"))
+    phone = _extract_phone(raw.get("description")) or ""
 
     # Fecha: ISO 8601 → string legible
     reported_at_raw = raw.get("reported_at")
     if reported_at_raw:
         try:
             dt = datetime.fromisoformat(reported_at_raw.replace("Z", "+00:00"))
-            fecha = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fecha_registro = dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         except ValueError:
-            fecha = reported_at_raw
+            fecha_registro = reported_at_raw
     else:
-        fecha = None
+        fecha_registro = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     resolved_at_raw = raw.get("resolved_at")
     if resolved_at_raw:
@@ -111,29 +112,44 @@ def _build_record(raw: dict[str, Any]) -> dict[str, Any]:
     else:
         fecha_resolucion = None
 
+    # fecha_actualizacion: usamos la de resolución si existe (info más reciente), si no la de registro
+    fecha_actualizacion = fecha_resolucion or fecha_registro
+
     record_id = raw.get("id", "")
+    ubicacion = raw.get("region") or ""
+    ubicacion_detalle = raw.get("location_detail") or ""
+
+    # observaciones: descripción + señas particulares, si existen
+    descripcion = raw.get("description") or ""
+    senas = raw.get("senas") or ""
+    observaciones = descripcion
+    if senas:
+        observaciones = f"{observaciones} | Señas particulares: {senas}".strip(" |")
 
     return {
-        "id":               record_id,
-        "nombre":           raw.get("display_name"),
-        "edad":             age_str,
-        "genero":           _normalize_gender(raw.get("gender")),
-        "cedula":           raw.get("cedula"),
-        "estado":           status,
-        "estado_interno":   raw_status,
-        "ubicacion":        raw.get("region"),
-        "ubicacion_detalle": raw.get("location_detail"),
-        "fecha_reporte":    fecha,
-        "fecha_resolucion": fecha_resolucion,
-        "telefono":         phone,
-        "descripcion":      raw.get("description"),
-        "senas":            raw.get("senas"),
-        "foto_url":         raw.get("photo_url"),
-        "url_perfil":       f"{BASE_URL}/persona/{record_id}/" if record_id else None,
-        "_fuente":          "reencuentro.help",
-        "_kind":            raw.get("kind"),
-        "_source":          raw.get("source"),
-        "_posible_duplicado": raw.get("posible_duplicado", False),
+        "id":                    record_id,
+        "nombre":                raw.get("display_name") or "",
+        "cedula":                raw.get("cedula") or "",
+        "edad":                  age_str,
+        "ultima_ubicacion":      f"{ubicacion_detalle} {ubicacion}".strip() or ubicacion,
+        "telefono_contacto":     phone,
+        "observaciones":         observaciones,
+        "estado":                status,
+        "ubicacion_encontrado":  ubicacion_detalle if es_localizado else "",
+        "encontrado_por":        "",  # no disponible en esta fuente
+        "encontrado_por_cedula": "",  # no disponible en esta fuente
+        "foto_url":              raw.get("photo_url") or "",
+        "fecha_registro":        fecha_registro,
+        "fecha_actualizacion":   fecha_actualizacion,
+        "es_menor":              False,  # no disponible en esta fuente
+        "fuente":                "reencuentro.help",
+        # --- campos extra fuera del esquema de 16 (trazabilidad, ignorados por el pipeline) ---
+        "_genero":               _normalize_gender(raw.get("gender")),
+        "_estado_interno":       raw_status,
+        "_kind":                 raw.get("kind"),
+        "_source":               raw.get("source"),
+        "_posible_duplicado":    raw.get("posible_duplicado", False),
+        "_url_perfil":           f"{BASE_URL}/persona/{record_id}/" if record_id else None,
     }
 
 
@@ -262,7 +278,7 @@ def run(
     with open(output_file, "w", encoding="utf-8") as f:
         json.dump(all_records, f, ensure_ascii=False, indent=2)
 
-    print(f"\n[reencuentro] ✓ {len(all_records)} registros guardados en {output_file}")
+    print(f"\n[reencuentro] OK: {len(all_records)} registros guardados en {output_file}")
     return all_records
 
 
